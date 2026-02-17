@@ -356,3 +356,86 @@ body {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-6px); }
 }
+/* --- Updated Forensic Evidence Grid (Perfect Alignment Fix) --- */
+.forensic-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr); /* Forces 3 equal columns */
+  gap: 4px;
+  margin: 1.5rem 0;
+  padding: 12px 8px;
+  background: #f1f5f9; 
+  border-radius: 16px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  width: 100%;
+  box-sizing: border-box; /* Critical for alignment */
+}
+
+.evidence-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center; 
+  justify-content: center;
+  text-align: center;
+  min-width: 0; /* Prevents long numbers from pushing the grid wide */
+}
+
+.evidence-item:not(:last-child) {
+  border-right: 1px solid rgba(15, 23, 42, 0.1);
+}
+
+.evidence-item .label {
+  font-size: 0.55rem; /* Slightly smaller for better fit */
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+  white-space: nowrap; /* Keeps label on one line */
+}
+
+.evidence-item .value {
+  font-size: 0.75rem; /* Slightly smaller to handle long ETH numbers */
+  font-weight: 800;
+  color: var(--accent-blue);
+  font-family: 'JetBrains Mono', monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis; /* Adds '...' if the number is impossibly long */
+  max-width: 100%;
+}
+
+/* --- Result Card Constraints (The "Spill" Fix) --- */
+.result-card {
+  max-height: 550px; 
+  overflow-y: auto;  
+  overflow-x: hidden; /* Prevents horizontal shaking */
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent-blue) transparent;
+}
+
+/* Smooth internal scrolling for Chrome/Safari */
+.result-card::-webkit-scrollbar {
+  width: 4px;
+}
+.result-card::-webkit-scrollbar-thumb {
+  background: rgba(0, 112, 243, 0.2);
+  border-radius: 10px;
+}
+
+/* --- Terminal Auto-Scroll Fix --- */
+.terminal-screen {
+  height: 200px;
+  background: #020617;
+  border-radius: 14px;
+  padding: 15px;
+  font-family: 'JetBrains Mono', monospace;
+  color: #38bdf8;
+  font-size: 0.8rem;
+  overflow-y: auto; 
+  display: flex;
+  flex-direction: column;
+}

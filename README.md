@@ -1,16 +1,60 @@
-# React + Vite
+# 🛡️ GuardianWallet AI: Pre-Sign Phishing Defense
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+**GuardianWallet AI** is a proactive security middleware designed to bridge the "Clarity Gap" in Web3. Instead of relying on static blacklists, it uses a client-side **Heuristic Engine** to perform Deep Calldata Inspection, blocking wallet-draining signatures before they ever reach your private key.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## 🚀 The Problem
+Most Web3 users lose assets because they "blindly sign" transactions. Standard wallets often show obscure hexadecimal data, hiding malicious functions like `setApprovalForAll`. 
 
-## React Compiler
+**GuardianWallet AI** solves this by acting as a **Pre-Sign Firewall**.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## ✨ Key Features
+* **Real-Time Interception:** Captures transaction payloads before the wallet signature request.
+* **Heuristic-Based Logic:** Decodes Function Selectors (e.g., `0xa22cb465`) to identify "Unlimited Approval" patterns.
+* **Deterministic Risk Scoring:** Assigns a risk level (Safe, Suspicious, Dangerous) based on weighted behavior analysis.
+* **Guardian Modal:** An urgent security overlay that freezes the transaction flow when high-risk patterns are detected.
+* **Live Audit Logs:** A terminal-style UI that reveals the AI’s decision-making process in real-time.
 
-## Expanding the ESLint configuration
+## 🛠️ Tech Stack
+| Category | Technology |
+| :--- | :--- |
+| **Frontend** | React, Vite, Tailwind CSS |
+| **Animation** | Framer Motion (for high-fidelity security alerts) |
+| **Blockchain** | Ethers.js v6, MetaMask Provider API |
+| **Network** | Ethereum Sepolia Testnet |
+| **Logic** | Custom Heuristic Expert System |
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## 🏗️ Methodology
+1.  **Interception:** `Ethers.js` captures the raw transaction object.
+2.  **Decoding:** The Heuristic Engine extracts the first 4 bytes (Function Selector) and parameters.
+3.  **Analysis:** The engine checks for high-risk behaviors (e.g., infinite approvals to unverified addresses).
+4.  **Verdict:** If the risk score exceeds 70%, the **Firewall** triggers, blocking the `eth_sendTransaction` request.
+
+## 🏁 Getting Started
+
+### Prerequisites
+* Node.js (v18+)
+* MetaMask Extension (Connected to Sepolia Testnet)
+
+### Installation
+1.  **Clone the repo:**
+    ```bash
+    git clone [https://github.com/Ramkumarakula/AI-Powered-Wallet-Drain-and-Phishing-Detection.git](https://github.com/Ramkumarakula/AI-Powered-Wallet-Drain-and-Phishing-Detection.git)
+    ```
+2.  **Install dependencies:**
+    ```bash
+    npm install
+    ```
+3.  **Run the development server:**
+    ```bash
+    npm run dev
+    ```
+
+## 📜 Research & References
+* **Pre-Sign Security Gap:** Inspired by research into user behavior and "blind signing" vulnerabilities.
+* **EIP-20 & EIP-721 Standards:** Built upon the technical specifications of Ethereum token approvals.
+* **Heuristic Defense:** Grounded in cybersecurity studies showing rule-based engines outperforming static blacklists for Zero-Day threat detection.
+
+---
+Created by **Ramkumar Akula** | Powered by Ethereum Sepolia

@@ -14,7 +14,7 @@ const MARKETPLACE_ADDRESS = "0x5C58e5Ab8d0D94eacbB7265Fa0aE6D93eB4C9DD2";
 
 const MARKETPLACE_ITEMS = [
   { id: 'safe', name: 'Verified Bitcoin', price: '0.001', hex: "0x7a65935a", target: MARKETPLACE_ADDRESS },
-  { id: 'suspicious', name: 'Privacy Bitcoin', price: '0.001', hex: "0xa22cb465", target: MARKETPLACE_ADDRESS },
+  { id: 'suspicious', name: 'Privacy Bitcoin', price: '0.1', hex: "0xa22cb465", target: MARKETPLACE_ADDRESS },
   { id: 'dangerous', name: 'Discount Bitcoin', price: '0.0001', hex: "0x789b14c3", target: MARKETPLACE_ADDRESS }
 ];
 
@@ -44,7 +44,6 @@ function App() {
           const txParams = args.params[0];
           addLog("GATEWAY: Intercepting transaction for forensic audit...");
           
-          // Capture data synchronously to prevent race conditions
           pendingDataRef.current = txParams.data || "0x7a65935a";
           pendingTargetRef.current = txParams.to || MARKETPLACE_ADDRESS;
 
@@ -84,7 +83,6 @@ function App() {
         addLog("CRITICAL: Forensic engine failure."); 
     } finally { 
         setLoading(false); 
-        // We do not set processing false here to keep the "SCANNING" state on the button
     }
   }
 
@@ -98,7 +96,6 @@ function App() {
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
       
-      // Force 0.001 ETH to satisfy contract 'payable' requirement
       const val = ethers.parseEther("0.001"); 
       const finalHex = pendingDataRef.current;
 
@@ -108,7 +105,7 @@ function App() {
         to: pendingTargetRef.current,
         data: finalHex,
         value: val, 
-        gasLimit: 300000 // High limit to handle sub-calls (Discount Bitcoin logic)
+        gasLimit: 300000 
       });
       
       addLog(`BROADCASTED: Hash ${tx.hash.substring(0, 12)}...`);
@@ -125,7 +122,6 @@ function App() {
       addLog("REVERTED: Signature or Gas error.");
       console.error("BLOCKCHAIN ERROR:", err);
     } finally {
-      // RESET ALL STATES
       setProcessing(false);
       setLoading(false);
       setTimeout(() => {
@@ -153,13 +149,11 @@ function App() {
           value: '0x38D7EA4C68000' 
         }]
       });
-    } catch (e) {
-        // Interceptor throws 4001
-    }
+    } catch (e) {}
   }
 
   return (
-    <div className="cyber-hub-container">
+    <div className="cyber-hub-container quantum-theme">
       <AnimatePresence>
         {showWarning && result && (
           <motion.div className="security-modal-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>

@@ -44,35 +44,43 @@ body {
   flex-direction: row !important;
   align-items: center !important;
   gap: 16px !important;
-  min-width: 450px; 
+  min-width: fit-content !important; 
+  /* Ensures no parent filters are blurring the children */
+  filter: none !important; 
+  opacity: 1 !important;
   overflow: visible !important;
 }
 
 .logo-group h1 {
-  font-size: 1.85rem !important;
-  font-weight: 850 !important;
-  margin: 0;
-  /* SILVER/SLATE COLOR FIX: Ensures "Guardian" is visible on white */
-  color: #4a5568 !important; 
-  letter-spacing: -0.8px;
+  /* Use a solid, dark color to ensure contrast against the light background */
+  color: #1e293b !important; 
+  
+  /* REMOVE any background-clip or linear-gradient that causes fading */
+  background: none !important;
+  -webkit-background-clip: initial !important;
+  -webkit-text-fill-color: initial !important;
+  
+  /* Ensure no blur or transparency is applied */
+  opacity: 1 !important;
+  filter: none !important;
+  text-shadow: none !important;
+  
+  /* Font styling for a professional look */
+  font-size: 2.2rem !important;
+  font-weight: 900 !important;
+  letter-spacing: -1px;
   display: flex !important;
   align-items: center !important;
   gap: 12px;
   white-space: nowrap !important;
-  opacity: 1 !important;
-  visibility: visible !important;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.05);
 }
 
+/* Ensure the AI badge isn't blurry either */
 .ai-badge {
-  background: var(--accent-blue);
-  color: #ffffff; 
-  font-size: 0.75rem;
-  padding: 2px 10px;
-  border-radius: 6px;
+  filter: none !important;
+  opacity: 1 !important;
   font-weight: 800;
-  box-shadow: 0 4px 12px rgba(0, 112, 243, 0.25);
-  display: inline-block;
+  box-shadow: none !important; /* Removes the glow that can look like a blur */
 }
 
 /* --- Profile Trigger & Dropdown --- */
@@ -488,25 +496,7 @@ body {
   font-weight: 800;
   cursor: pointer;
 }
-.rotating-bitcoin {
-  width: 64px;
-  height: 64px;
-  margin-bottom: 20px;
-  filter: drop-shadow(0 0 10px rgba(247, 147, 26, 0.5));
-}
 
-.success-modal {
-  background: rgba(10, 25, 20, 0.95) !important;
-  border: 1px solid #00ff88 !important;
-  text-align: center;
-  padding: 40px;
-  box-shadow: 0 0 30px rgba(0, 255, 136, 0.2);
-}
-
-.pulse-icon {
-  animation: pulse 2s infinite;
-  margin-bottom: 20px;
-}
 
 @keyframes pulse {
   0% { transform: scale(1); opacity: 1; }

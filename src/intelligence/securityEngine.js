@@ -1,120 +1,101 @@
 import { ethers } from 'ethers';
 
-// 1. COMMUNITY BLACKLIST (Known Threats)
-const GLOBAL_BLACKLIST = [
-    "0x742d35Cc6634C0532925a3b844Bc454e4438f44e", // Phishing Example
-    "0x1234567890123456789012345678901234567890"  // Drainer Example
-];
-
-// 2. CALLDATA HUMANIZER (Tailored to your GuardianMarketplace)
-const humanizeData = (hex) => {
-    // Logic for Privacy Bitcoin (Approval Trap)
-    if (hex.includes("0xa22cb465")) return "🚨 PERMISSION TRAP: Requesting full access to move your assets.";
-    
-    // Logic for Discount Bitcoin (The Drainer)
-    if (hex.includes("0x789b14c3")) return "💸 FUND EXFILTRATION: Payment is being diverted to a private owner wallet.";
-    
-    // Logic for Verified Bitcoin (The Safe Path)
-    if (hex.includes("0x7a65935a")) return "✅ VERIFIED: Standard purchase on a secure gateway.";
-    
-    // Other common malicious signatures
-    if (hex.includes("0x095ea7b3")) return "🔓 WARNING: Requesting unlimited token spending allowance.";
-    
-    return "Standard Contract Interaction.";
+// 1. DYNAMIC MODEL STATE
+// We initialize with default values to prevent 'undefined' errors during first render.
+let adaptiveWeights = {
+    functionRisk: 50.0,
+    newContractPenalty: 25.0,
+    lowLiquidityPenalty: 15.0,
+    trustBonus: -10.0,
+    externalIntelPenalty: 40.0
 };
 
 /**
- * AI Inference Brain (Calibrated for Enterprise Risk)
+ * REINFORCEMENT LEARNING SYNC: Updates the local brain state with the 
+ * persistent weights from App.jsx/LocalStorage.
  */
-const runAIInference = (features) => {
-    let aiProbability = 0;
-
-    // RULE 1: Function Risk (Heavy weight on Drainer/Approval signatures)
-    if (features.functionRisk > 0.8) {
-        aiProbability += 50; 
-    } else {
-        aiProbability += 5; 
+export const updateAIModel = (newWeights) => {
+    // GUARD: Ensure newWeights exists before attempting to use it
+    if (!newWeights || typeof newWeights !== 'object') return;
+    
+    adaptiveWeights = { ...newWeights };
+    
+    // Defensive logging: only call toFixed if the property exists
+    if (adaptiveWeights.functionRisk !== undefined) {
+        console.log(`[AI Engine] Weights Synchronized. Current Function Risk: ${adaptiveWeights.functionRisk.toFixed(2)}`);
     }
-
-    // RULE 2: Contract Reputation (Age/Activity)
-    // For the demo, your new contract is "Young" (low txCount), so it gets a slight suspicion boost
-    if (features.contractAge < 5) {
-        aiProbability += 25; // Brand new contracts are high risk
-    } else if (features.contractAge < 50) {
-        aiProbability += 10; 
-    } else {
-        aiProbability -= 10; // Established trust
-    }
-
-    // RULE 3: Liquidity Check
-    if (features.ethBalance < 0.0001 && features.isContract) {
-        aiProbability += 15; // Low balance for a vendor contract is sus
-    }
-
-    return Math.min(Math.max(aiProbability, 0), 100);
 };
+
+// 2. EXTERNAL INTEL: GoPlus Security Integration
+const checkExternalThreats = async (address) => {
+    try {
+        const response = await fetch(`https://api.gopluslabs.io/api/v1/address_security/${address}?chain_id=1`);
+        const data = await response.json();
+        return {
+            isBlacklisted: data.result?.is_blacklisted === "1",
+            honeypot: data.result?.is_honeypot === "1",
+            riskScore: parseInt(data.result?.risk_score || "0")
+        };
+    } catch (err) {
+        console.warn("External Intelligence Feed Offline.");
+        return null;
+    }
+};
+
+const humanizeData = (hex) => {
+    if (hex.includes("0xa22cb465")) return "🚨 PERMISSION TRAP: Requesting full access to move your assets.";
+    if (hex.includes("0x789b14c3")) return "💸 FUND EXFILTRATION: Payment is being diverted to a private owner wallet.";
+    if (hex.includes("0x7a65935a")) return "✅ VERIFIED: Standard purchase on a secure gateway.";
+    return "Standard Contract Interaction.";
+};
+
+
 
 export const analyzeTransaction = async (transactionData, contractAddress, provider, userAddress) => {
     let detections = [];
-    let balance = 0;
-    let txCount = 0;
-    let code = "0x";
-    let userBalance = 0;
+    
+    // FETCH LIVE FORENSIC & EXTERNAL DATA IN PARALLEL
+    const [rawBalance, count, code, rawUserBal, externalIntel] = await Promise.all([
+        provider.getBalance(contractAddress).catch(() => 0n),
+        provider.getTransactionCount(contractAddress).catch(() => 0),
+        provider.getCode(contractAddress).catch(() => "0x"),
+        userAddress ? provider.getBalance(userAddress).catch(() => 0n) : Promise.resolve(0n),
+        checkExternalThreats(contractAddress) 
+    ]);
 
-    const isBlacklisted = GLOBAL_BLACKLIST.includes(contractAddress.toLowerCase());
-
-    // 1. Fetch Live Forensic Data
-    try {
-        if (provider && ethers.isAddress(contractAddress)) {
-            const [rawBalance, count, contractCode, rawUserBalance] = await Promise.all([
-                provider.getBalance(contractAddress),
-                provider.getTransactionCount(contractAddress),
-                provider.getCode(contractAddress),
-                userAddress ? provider.getBalance(userAddress) : Promise.resolve(0n)
-            ]);
-            balance = parseFloat(ethers.formatEther(rawBalance));
-            txCount = count;
-            code = contractCode;
-            userBalance = parseFloat(ethers.formatEther(rawUserBalance));
-        }
-    } catch (err) {
-        console.error("Forensic collection failed:", err);
-    }
-
-    // 2. Build the Feature Vector (Detect your specific signatures)
     const features = {
-        // Includes signatures for setApprovalForAll (0xa22cb465) and DiscountBitcoin (0x789b14c3)
         functionRisk: (transactionData?.includes("0xa22cb465") || transactionData?.includes("0x789b14c3")) ? 0.9 : 0.1,
-        contractAge: txCount,
-        ethBalance: balance,
-        isContract: code !== "0x" ? 1 : 0,
-        isUnlimited: transactionData?.includes("ffffffff") ? 1 : 0
+        contractAge: count,
+        ethBalance: parseFloat(ethers.formatEther(rawBalance)),
+        isContract: code !== "0x" ? 1 : 0
     };
 
-    // 3. Run AI Decision Logic
-    const riskScore = isBlacklisted ? 100 : Math.round(runAIInference(features));
+    // 3. ADAPTIVE INFERENCE BRAIN
+    let riskScore = 0;
+    
+    // We use the current adaptiveWeights to calculate the score
+    if (features.functionRisk > 0.8) riskScore += adaptiveWeights.functionRisk || 50;
+    if (features.contractAge < 5) riskScore += adaptiveWeights.newContractPenalty || 25;
+    if (features.contractAge > 50) riskScore += (adaptiveWeights.trustBonus || -10);
+    
+    if (externalIntel?.isBlacklisted) {
+        riskScore += (adaptiveWeights.externalIntelPenalty || 40);
+        detections.push("GLOBAL INTEL: Address flagged in GoPlus community blacklist.");
+    }
 
-    // 4. Detailed Forensic Detections
-    if (isBlacklisted) detections.push("SECURITY FEED: Address flagged in global phishing database.");
-    if (transactionData?.includes("0xa22cb465")) {
-        detections.push("THREAT DETECTED: Permission request bypasses standard transfer protocols.");
-    }
-    if (transactionData?.includes("0x789b14c3")) {
-        detections.push("ANOMALY: Direct fund routing detected. (Owner-Transfer Pattern)");
-    }
-    if (features.contractAge < 10) {
-        detections.push("SUSPICION: Low contract maturity detected.");
-    }
+    if (features.functionRisk > 0.8) detections.push("THREAT: High-risk function signature detected.");
+    if (features.contractAge < 10) detections.push("SUSPICION: Low contract maturity.");
+    if (features.isContract === 0) detections.push("ALERT: Sending data to a Personal Wallet (EOA) instead of a Contract.");
 
     return {
-        isSafe: riskScore < 50, // Stricter safety threshold
-        riskScore: riskScore,
+        isSafe: riskScore < 50,
+        riskScore: Math.min(riskScore, 100),
         detections: detections,
         features: features, 
         translation: humanizeData(transactionData),
-        simulation: {
-            current: userBalance,
-            after: userBalance - 0.001 
+        simulation: { 
+            current: parseFloat(ethers.formatEther(rawUserBal)), 
+            after: parseFloat(ethers.formatEther(rawUserBal)) - 0.0001 
         },
         verdict: riskScore >= 75 ? "DANGEROUS" : riskScore >= 50 ? "SUSPICIOUS" : "SAFE"
     };

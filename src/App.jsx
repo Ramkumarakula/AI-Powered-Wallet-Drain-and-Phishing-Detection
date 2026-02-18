@@ -1,21 +1,20 @@
 import { useState, useEffect, useRef } from 'react'
 import { ethers } from 'ethers'
 import { motion, AnimatePresence } from 'framer-motion'
-import { analyzeTransaction } from './intelligence/securityEngine'
+import { analyzeTransaction, updateAIModel } from './intelligence/securityEngine'
 import { 
-  ShieldAlert, ShieldCheck, Search, Activity, 
-  Terminal, Shield, Lock as Padlock, Wallet, 
-  AlertTriangle, X, ChevronRight, Cpu, LogOut, ShoppingCart, CheckCircle, ExternalLink
+  ShieldAlert, ShieldCheck, ShoppingCart, 
+  CheckCircle, Activity, Terminal, Code, AlertTriangle,
+  User, LogOut, ChevronDown 
 } from 'lucide-react'
 import './App.css'
 
-// 1. LIVE CONTRACT CONFIGURATION
 const MARKETPLACE_ADDRESS = "0x5C58e5Ab8d0D94eacbB7265Fa0aE6D93eB4C9DD2";
 
 const MARKETPLACE_ITEMS = [
-  { id: 'safe', name: 'Verified Bitcoin', price: '0.001', hex: "0x7a65935a", target: MARKETPLACE_ADDRESS },
-  { id: 'suspicious', name: 'Privacy Bitcoin', price: '0.1', hex: "0xa22cb465", target: MARKETPLACE_ADDRESS },
-  { id: 'dangerous', name: 'Discount Bitcoin', price: '0.0001', hex: "0x789b14c3", target: MARKETPLACE_ADDRESS }
+  { id: 'safe', name: 'Verified Bitcoin', price: '0.001', hex: "0x7a65935a" },
+  { id: 'suspicious', name: 'Privacy Bitcoin', price: '0.1', hex: "0xa22cb465" },
+  { id: 'dangerous', name: 'Discount Bitcoin', price: '0.0001', hex: "0x789b14c3" }
 ];
 
 function App() {
@@ -24,39 +23,43 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [showWarning, setShowWarning] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
-  const [txHash, setTxHash] = useState('')
   const [logs, setLogs] = useState([])
   const [processing, setProcessing] = useState(false)
+  const [manualTarget, setManualTarget] = useState('')
+  const [manualHex, setManualHex] = useState('')
+  const [showProfileMenu, setShowProfileMenu] = useState(false)
 
-  // 2. CRITICAL REFS FOR SYNCHRONOUS DATA ACCESS
-  const bypassRef = useRef(false);
-  const pendingDataRef = useRef("0x7a65935a"); 
-  const pendingTargetRef = useRef(MARKETPLACE_ADDRESS);
+  // Modal Control Ref: Prevents infinite popup loop
+  const hasWarnedRef = useRef(false);
 
-  const addLog = (msg) => setLogs(prev => [...prev, `> ${msg}`])
-
-  // 3. THE GUARDIAN INTERCEPTOR
-  useEffect(() => {
-    if (window.ethereum) {
-      const originalRequest = window.ethereum.request;
-      window.ethereum.request = async (args) => {
-        if (args.method === 'eth_sendTransaction' && bypassRef.current === false) {
-          const txParams = args.params[0];
-          addLog("GATEWAY: Intercepting transaction for forensic audit...");
-          
-          pendingDataRef.current = txParams.data || "0x7a65935a";
-          pendingTargetRef.current = txParams.to || MARKETPLACE_ADDRESS;
-
-          handleSecurityAudit(txParams.to, txParams.data || "0x7a65935a");
-
-          return new Promise((_, reject) => {
-            reject({ code: 4001, message: "GuardianAI: Analysis in progress." });
-          });
-        }
-        return originalRequest.apply(window.ethereum, [args]);
+  // 1. BRAIN INITIALIZATION
+  const [adaptiveWeights, setAdaptiveWeights] = useState(() => {
+    const saved = localStorage.getItem('guardian_ai_brain');
+    try {
+      return saved ? JSON.parse(saved) : {
+        functionRisk: 50.0,
+        newContractPenalty: 25.0,
+        lowLiquidityPenalty: 15.0,
+        trustBonus: 10.0
       };
+    } catch (e) {
+      return { functionRisk: 50.0, newContractPenalty: 25.0, lowLiquidityPenalty: 15.0, trustBonus: 10.0 };
     }
-  }, [account]);
+  });
+
+  // 2. SYNC EFFECT
+  useEffect(() => {
+    if (adaptiveWeights) {
+      localStorage.setItem('guardian_ai_brain', JSON.stringify(adaptiveWeights));
+      updateAIModel(adaptiveWeights);
+    }
+  }, [adaptiveWeights]);
+
+  const bypassRef = useRef(false);
+  const pendingDataRef = useRef(""); 
+  const pendingTargetRef = useRef("");
+
+  const addLog = (msg) => setLogs(prev => [`> ${msg}`, ...prev.slice(0, 10)])
 
   const connectWallet = async () => {
     if (!window.ethereum) return;
@@ -64,129 +67,117 @@ function App() {
       const provider = new ethers.BrowserProvider(window.ethereum);
       const accounts = await provider.send("eth_requestAccounts", []);
       setAccount(accounts[0]);
-      addLog(`ACCESS GRANTED: ${accounts[0].substring(0, 10)}...`);
+      addLog(`ACCESS GRANTED: ${accounts[0].substring(0, 8)}...`);
     } catch (err) { addLog("DENIED: Connection rejected."); }
   }
 
+  const disconnectWallet = () => {
+    setAccount(null);
+    setShowProfileMenu(false);
+    setResult(null);
+    addLog("SESSION ENDED: Wallet disconnected.");
+  };
+
   const handleSecurityAudit = async (targetAddr, data) => {
+    if (!targetAddr || !ethers.isAddress(targetAddr)) return addLog("ERROR: Invalid target.");
     setLoading(true);
     setResult(null);
-    addLog("AI BRAIN: Initializing deep calldata inspection...");
-    
+    hasWarnedRef.current = false; // Reset for new scan
+    addLog("AI BRAIN: Synchronizing Global Threat Feeds...");
     try {
         const provider = new ethers.BrowserProvider(window.ethereum);
         const report = await analyzeTransaction(data, targetAddr, provider, account);
         setResult(report);
         addLog(`SCAN COMPLETE: Verdict is ${report.verdict}`);
-        if (!report.isSafe) setTimeout(() => setShowWarning(true), 600);
-    } catch (error) { 
-        addLog("CRITICAL: Forensic engine failure."); 
-    } finally { 
-        setLoading(false); 
+        
+        if (!report.isSafe && !hasWarnedRef.current) {
+            setTimeout(() => {
+                setShowWarning(true);
+                hasWarnedRef.current = true;
+            }, 600);
+        }
+    } catch (error) { addLog("CRITICAL: Engine offline."); } 
+    finally { setLoading(false); setProcessing(false); }
+  }
+
+  const handleAIFeedback = async (action) => {
+    const learningRate = 0.15;
+    const isSignatureThreat = result?.features?.functionRisk > 0.8;
+    const targetFeature = isSignatureThreat ? 'functionRisk' : 'newContractPenalty';
+
+    setAdaptiveWeights(prev => ({
+        ...prev,
+        [targetFeature]: action === 'ABORT' ? prev[targetFeature] * (1 + learningRate) : prev[targetFeature] * (1 - learningRate)
+    }));
+
+    setShowWarning(false);
+
+    if (action === 'ABORT') {
+        addLog(`LEARNING: Increased ${targetFeature} sensitivity.`);
+        const provider = new ethers.BrowserProvider(window.ethereum);
+        const report = await analyzeTransaction(
+            pendingDataRef.current || manualHex, 
+            pendingTargetRef.current || manualTarget, 
+            provider, 
+            account
+        );
+        setResult(report);
+    } else {
+        addLog(`LEARNING: Relaxed ${targetFeature} threshold.`);
+        signOnSepolia();
     }
   }
 
   const signOnSepolia = async () => {
-    if (!window.ethereum || !account) return;
+    if (!window.ethereum || !account) return addLog("Connect wallet first!");
     
-    addLog("FIREWALL: Master Key Active. Bypassing Interceptor...");
-    bypassRef.current = true; 
-    
+    const finalTarget = pendingTargetRef.current || manualTarget;
+    const finalData = pendingDataRef.current || manualHex;
+
+    if (!finalTarget) return addLog("ERROR: No target defined.");
+
+    bypassRef.current = true;
     try {
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
-      
-      const val = ethers.parseEther("0.001"); 
-      const finalHex = pendingDataRef.current;
-
-      addLog(`TRANSMITTING: Executing payload ${finalHex.substring(0, 10)}...`);
-      
+      addLog("FIREWALL: Bypassing for authorized execution...");
       const tx = await signer.sendTransaction({
-        to: pendingTargetRef.current,
-        data: finalHex,
-        value: val, 
-        gasLimit: 300000 
+        to: finalTarget,
+        data: finalData || "0x",
+        value: ethers.parseEther("0.0001")
       });
-      
-      addLog(`BROADCASTED: Hash ${tx.hash.substring(0, 12)}...`);
-      setTxHash(tx.hash);
-      setShowWarning(false);
-      
-      addLog("SEPOLIA: Waiting for block confirmation...");
-      await tx.wait(); 
-      
       setShowSuccess(true);
-      addLog("SUCCESS: Assets secured on-chain.");
-      
-    } catch (err) {
-      addLog("REVERTED: Signature or Gas error.");
-      console.error("BLOCKCHAIN ERROR:", err);
-    } finally {
-      setProcessing(false);
-      setLoading(false);
-      setTimeout(() => {
-        bypassRef.current = false;
-        addLog("FIREWALL: Logic restored to active protection.");
-      }, 2000);
-    }
+      addLog("SUCCESS: Transaction verified.");
+    } catch (err) { addLog("REVERTED: Signature rejected."); } 
+    finally { setTimeout(() => { bypassRef.current = false; }, 2000); }
   }
 
-  const initiatePurchase = async (item) => {
+  const initiatePurchase = (item) => {
     if (!account) return addLog("Connect wallet first!");
-    if (processing) return;
-
     setProcessing(true);
-    setResult(null);
-    addLog(`MARKETPLACE: Preparing order for ${item.name}...`);
-    
-    try {
-      await window.ethereum.request({
-        method: 'eth_sendTransaction',
-        params: [{ 
-          from: account, 
-          to: item.target, 
-          data: item.hex, 
-          value: '0x38D7EA4C68000' 
-        }]
-      });
-    } catch (e) {}
+    pendingDataRef.current = item.hex;
+    pendingTargetRef.current = MARKETPLACE_ADDRESS;
+    addLog(`MARKETPLACE: Ordering ${item.name}...`);
+    handleSecurityAudit(MARKETPLACE_ADDRESS, item.hex);
   }
 
   return (
-    <div className="cyber-hub-container quantum-theme">
+    <div className="cyber-hub-container">
       <AnimatePresence>
         {showWarning && result && (
-          <motion.div className="security-modal-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+          <div className="security-modal-overlay">
             <motion.div className="glass-card dangerous warning-modal" initial={{ scale: 0.8 }} animate={{ scale: 1 }}>
-              <AlertTriangle size={64} className="vibrating-icon" color="#ff0055" />
-              <h2>THREAT INTERCEPTED</h2>
+              <AlertTriangle size={64} color="#ff3d00" />
+              <h2>THREAT DETECTED</h2>
               <div className="warning-details-box">
                 {result.detections.map((d, i) => <p key={i}>⚠️ {d}</p>)}
               </div>
               <div className="modal-actions">
-                <button className="abort-btn" onClick={() => { setShowWarning(false); setProcessing(false); }}>ABORT</button>
-                <button className="bypass-btn" onClick={signOnSepolia}>BYPASS & SIGN</button>
+                <button className="abort-btn" onClick={() => handleAIFeedback('ABORT')}>ABORT & REINFORCE</button>
+                <button className="bypass-btn" onClick={() => handleAIFeedback('BYPASS')}>BYPASS & PROCEED</button>
               </div>
             </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {showSuccess && (
-          <motion.div className="security-modal-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <motion.div className="glass-card success-modal" initial={{ y: 50 }} animate={{ y: 0 }}>
-              <CheckCircle size={80} color="#00ff88" className="pulse-icon" />
-              <h2>TRANSACTION SUCCESSFUL</h2>
-              <p>Confirmed on Sepolia Testnet</p>
-              <div className="success-actions">
-                <a href={`https://sepolia.etherscan.io/tx/${txHash}`} target="_blank" rel="noreferrer" className="etherscan-link">
-                  VIEW ON ETHERSCAN <ExternalLink size={16} />
-                </a>
-                <button className="close-success-btn" onClick={() => setShowSuccess(false)}>CLOSE</button>
-              </div>
-            </motion.div>
-          </motion.div>
+          </div>
         )}
       </AnimatePresence>
 
@@ -195,98 +186,129 @@ function App() {
           <ShieldAlert size={32} color="#0070f3" />
           <h1>GuardianWallet <span className="ai-badge">AI</span></h1>
         </div>
-        <div className="profile-section">
-          {account ? (
-            <button className="profile-trigger" onClick={() => setAccount(null)}>
-              <span className="account-tag">{account.substring(0, 6)}...</span>
-              <LogOut size={16} />
-            </button>
+        
+        <div className="wallet-section">
+          {!account ? (
+            <button onClick={connectWallet} className="connect-btn">CONNECT WALLET</button>
           ) : (
-            <button onClick={connectWallet} className="connect-btn">CONNECT</button>
+            <div className="profile-container">
+              <button className="profile-trigger" onClick={() => setShowProfileMenu(!showProfileMenu)}>
+                <div className="avatar-circle"><User size={16} /></div>
+                <span className="addr-text">{account.substring(0, 6)}...{account.substring(38)}</span>
+                <ChevronDown size={14} className={showProfileMenu ? 'rotate' : ''} />
+              </button>
+              
+              <AnimatePresence>
+                {showProfileMenu && (
+                  <motion.div 
+                    className="profile-dropdown"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 10 }}
+                  >
+                    <div className="dropdown-info">
+                      <p className="label">Account</p>
+                      <p className="full-addr">{account}</p>
+                    </div>
+                    <div className="divider"></div>
+                    <button className="logout-btn" onClick={disconnectWallet}>
+                      <LogOut size={16} /> Disconnect
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           )}
         </div>
       </header>
 
       <main className="scanner-layout">
         <section className="left-panel">
+          <section className="health-dashboard glass-card">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                <h3><Activity size={18} color="#00ff88" /> Engine Health</h3>
+                <button className="reset-btn" onClick={() => {localStorage.clear(); window.location.reload();}}>RESET</button>
+            </div>
+            <div className="weights-grid">
+              {Object.entries(adaptiveWeights).map(([key, value]) => (
+                <div key={key} className="weight-stat">
+                  <span className="label">{key.replace(/([A-Z])/g, ' $1')}</span>
+                  <div className="stat-bar">
+                    <motion.div className="stat-fill" animate={{ width: `${Math.min((value / 60) * 100, 100)}%` }} 
+                      style={{ backgroundColor: value > 35 ? '#ff3d00' : '#00ff88' }} />
+                  </div>
+                  <span className="value">{value.toFixed(1)}%</span>
+                </div>
+              ))}
+            </div>
+          </section>
+
           <div className="glass-card">
-            <h3><ShoppingCart size={20} color="#0070f3" /> Guardian Marketplace</h3>
+            <h3><ShoppingCart size={18} color="#0070f3" /> Marketplace</h3>
             <div className="marketplace-grid">
               {MARKETPLACE_ITEMS.map((item) => (
                 <div key={item.id} className="product-card">
                   <div className="product-header">
-                    <img src="https://cryptologos.cc/logos/bitcoin-btc-logo.svg" alt="BTC" width="24" />
-                    <span className="price">{item.price} ETH</span>
+                    <img src="https://cryptologos.cc/logos/bitcoin-btc-logo.svg" width="20" alt="btc" />
+                    <span className="price-tag">{item.price} ETH</span>
                   </div>
-                  <h4>{item.name}</h4>
+                  <div className="product-body"><h4>{item.name}</h4></div>
                   <button onClick={() => initiatePurchase(item)} className="buy-btn" disabled={processing}>
-                    {processing ? "SCANNING..." : "BUY BITCOIN"}
+                    {processing ? "SCANNING..." : "BUY"}
                   </button>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="glass-card terminal-card">
-            <div className="terminal-screen">
-              {logs.map((log, i) => <p key={i} className="terminal-line">{log}</p>)}
+          <div className="glass-card sandbox-card">
+            <h3><Code size={18} color="#0070f3" /> Forensic Sandbox</h3>
+            <div className="input-group">
+              <input placeholder="Contract Address (0x...)" value={manualTarget} onChange={(e) => setManualTarget(e.target.value)} />
+              <textarea placeholder="Hex Data" rows="2" value={manualHex} onChange={(e) => setManualHex(e.target.value)} />
+              <button className="scan-btn" onClick={() => { pendingTargetRef.current=""; handleSecurityAudit(manualTarget, manualHex); }}>
+                MANUAL SCAN
+              </button>
             </div>
           </div>
         </section>
 
         <section className="right-panel">
+          <div className="glass-card terminal-card">
+            <div className="terminal-screen">
+              {logs.map((log, i) => <p key={i} className="terminal-line">{log}</p>)}
+            </div>
+          </div>
+
           <AnimatePresence mode="wait">
             {result ? (
               <motion.div className={`result-card glass-card ${result.verdict.toLowerCase()}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} key={result.riskScore}>
                 <div className="result-header">
-                  {result.isSafe ? <ShieldCheck size={40} color="#00ff88" /> : <ShieldAlert size={40} color="#ff0055" />}
-                  <div><h2>VERDICT: {result.verdict}</h2><p>Risk Score: {result.riskScore}%</p></div>
+                  {result.isSafe ? <ShieldCheck size={40} color="#00ff88" /> : <ShieldAlert size={40} color="#ff3d00" />}
+                  <div><h2>{result.verdict}</h2><p>Risk Score: {result.riskScore}%</p></div>
                 </div>
-
                 <div className="translation-box">
-                  <span className="label">AI Translation:</span>
+                  <span className="label">Translation:</span>
                   <p>{result.translation}</p>
                 </div>
-
-                <div className="simulation-container">
-                    <div className="sim-pill before"><span>BEFORE</span><p>{result.simulation.current.toFixed(4)} ETH</p></div>
-                    <ChevronRight size={16} />
-                    <div className={`sim-pill after ${result.isSafe ? 'safe' : 'danger'}`}>
-                        <span>AFTER</span><p>{result.simulation.after.toFixed(4)} ETH</p>
-                    </div>
-                </div>
-
                 <div className="forensic-grid">
-                  <div className="evidence-item"><span className="label">Age</span><span className="value">{result.features.contractAge} Blk</span></div>
-                  <div className="evidence-item"><span className="label">Liquidity</span><span className="value">{result.features.ethBalance.toFixed(2)} ETH</span></div>
+                  <div className="evidence-item"><span className="label">Age</span><span className="value">{result.features.contractAge}</span></div>
+                  <div className="evidence-item"><span className="label">ETH</span><span className="value">{result.features.ethBalance.toFixed(2)}</span></div>
                   <div className="evidence-item"><span className="label">Type</span><span className="value">{result.features.isContract ? "Cont" : "Wall"}</span></div>
                 </div>
 
-                {result.isSafe && (
-                  <button className="final-sign-btn" onClick={signOnSepolia}>EXECUTE ON SEPOLIA</button>
+                {(pendingTargetRef.current || (manualTarget && ethers.isAddress(manualTarget))) && (
+                    <button 
+                      className={`final-sign-btn ${result.isSafe ? 'safe-sign' : 'danger-sign'}`} 
+                      onClick={signOnSepolia}
+                    >
+                      {result.isSafe ? "EXECUTE AUTHORIZED PAYMENT" : `FORCE AUTHORIZE (${result.verdict})`}
+                    </button>
                 )}
               </motion.div>
             ) : (
               <div className="empty-state glass-card">
-                {loading || processing ? (
-                  <div className="loader-box">
-                    <motion.img 
-                      src="https://cryptologos.cc/logos/bitcoin-btc-logo.svg" 
-                      alt="BTC" 
-                      className="rotating-bitcoin"
-                      animate={{ rotateY: 360 }}
-                      transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-                    />
-                    <h3>Forensic Audit Active</h3>
-                    <p>Scanning calldata for malicious signatures...</p>
-                  </div>
-                ) : (
-                  <>
-                    <Search size={48} color="#64748b" />
-                    <h3>Awaiting Checkout</h3>
-                    <p>Select a product to start a secure transaction audit.</p>
-                  </>
-                )}
+                {loading ? "SCANNING..." : "Awaiting Input Data..."}
               </div>
             )}
           </AnimatePresence>
